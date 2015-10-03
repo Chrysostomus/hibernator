@@ -78,6 +78,10 @@ if ! can_suspend_to_disk && ! btrfs_root; then
 		cp /boot/loader/entries/manjaro.conf /boot/loader/entries/manjaro.conf.old 
 		sed -i '/initrd/s/$/ $(resume_boot_option)/' /boot/loader/entries/manjaro.conf
 	fi
+	if [ -e /boot/loader/entries/arch.conf ]; then
+		cp /boot/loader/entries/arch.conf /boot/loader/entries/arch.conf.old 
+		sed -i '/initrd/s/$/ $(resume_boot_option)/' /boot/loader/entries/arch.conf
+	fi
 	#Add needed kernel parameters to syslinux
 	if [ -e /boot/syslinux/syslinux.cfg ]; then
 		cp /boot/syslinux/syslinux.cfg /boot/syslinux/syslinux.cfg.old 
