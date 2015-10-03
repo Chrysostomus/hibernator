@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# script to enable hibernation noninteractively, based on powerdown-functions
+shopt -s nullglob extglob
+
+swapfilesize=${1-4G}
+hibernate_offset() {
+    filefrag -v /swapfile | awk 'NR==4 {print $4}' | tr -d .
+}
+
+root_part() {
+    grep " / " /etc/fstab | awk '{print $1}' | sed 's/PARTUUID/UUID/' | sed 's/PARTUUID/UUID/
+}
+
+root_filesystem() {
+    grep " / " /etc/fstab | awk '{print $3}'
+}
+
+btrfs_root () {
+    [[ root_filesystem == btrfs ]]
+}
+
+has_swap_part () {
+    grep -qs swap /etc/fstab
+}
+
+can_suspend_to_disk () {
+    [[ -f /swapfile ]] || has_swap_part
+}
+
+swap_part() {
+    awk '$3=="swap" {print $1; exit}' /etc/fstab
+}
+
+resume_boot_option() {
+    if [[ -f /swapfile ]]; then
+        echo "resume=$(root_part) resume_offset=$(hibernate_offset)"
+    elif has_swap_part; then
+        echo "resume=$(swap_part)"
+    fi
+}
+
+# lock the file until the script finishes
+lock() {
+    local LOCK=/tmp/hibernator.lock
+    if ! mkdir "$LOCK" 2> /dev/null; then
+        echo "Working... $LOCK"
+        exit
+    fi
+    trap "rm -rf $LOCK" EXIT
+}
+
+if [[ $EUID != 0 ]]; then
+    echo "[hibernator] must be run as root"
+    exit 1
+fi
+
+has_resume_hook () {
+    grep -qs resume /etc/mkinitcpio.conf || grep -qs systemd /etc/mkinitcpio.conf
+}
+#############################
+lock
+
+if ! can_suspend_to_disk && ! btrfs_root; then
+  #Create and setup swapfile
+	fallocate -l $(echo $swapfilesize) /swapfile
+	chmod 600 /swapfile
+	mkswap /swapfile
+	swapon /swapfile
+	echo '/swapfile	swap	swap	defaults	0	0' >> /etc/fstab
+	#Add needed kernel parameters to grub
+	if [ -e /etc/default/grub ]; then
+		cp /etc/default/grub /etc/default/grub.old
+		sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/ s/"$/ $(resume_boot_option)"/' /etc/default/grub
+		update-grub
+	fi
+	#Add needed kernel parameters to systemd-boot
+	if [ -e /boot/loader/entries/manjaro.conf ]; then
+		cp /boot/loader/entries/manjaro.conf /boot/loader/entries/manjaro.conf.old 
+		sed -i '/initrd/s/$/ $(resume_boot_option)/' /boot/loader/entries/manjaro.conf
+	fi
+	#Add needed kernel parameters to syslinux
+	if [ -e /boot/syslinux/syslinux.cfg ]; then
+		cp /boot/syslinux/syslinux.cfg /boot/syslinux/syslinux.cfg.old 
+		sed -i '/APPEND/s/$/ $(resume_boot_option)/' /boot/syslinux/syslinux.cfg
+	fi
+	#Add needed kernel parameters to refind
+	if [ -e /boot/refind_linux.conf ]; then
+		cp /boot/refind_linux.conf /boot/refind_linux.conf.old
+		sed -i 's/"$/ $(resume_boot_option)"/' /boot/refind_linux.conf
+	fi	
+	#Add resume hook to initramfs if necessary
+	if ! has_resume_hook; then
+		cp /etc/mkinitcpio.conf /etc/mkinitcpio.conf.old \
+		&&sed -i s/'filesystem/filesystem resume'/g /etc/mknitcpio.conf
+		mkinitcpio -P
+	done
+	fi
+fi
