@@ -8,7 +8,7 @@ hibernate_offset() {
 }
 
 root_part() {
-    grep " / " /etc/fstab | awk '{print $1}' | sed 's/PARTUUID/UUID/' | sed 's/PARTUUID/UUID/
+    grep " / " /etc/fstab | awk '{print $1}' | sed 's/PARTUUID/UUID/' | sed 's/PARTUUID/UUID/'
 }
 
 root_filesystem() {
@@ -94,9 +94,8 @@ if ! can_suspend_to_disk && ! btrfs_root; then
 	fi	
 	#Add resume hook to initramfs if necessary
 	if ! has_resume_hook; then
-		cp /etc/mkinitcpio.conf /etc/mkinitcpio.conf.old \
-		&&sed -i s/'filesystem/filesystem resume'/g /etc/mknitcpio.conf
+		cp /etc/mkinitcpio.conf /etc/mkinitcpio.conf.old
+		sed -i s/'filesystem/filesystem resume'/g /etc/mknitcpio.conf
 		mkinitcpio -P
-	done
 	fi
 fi
