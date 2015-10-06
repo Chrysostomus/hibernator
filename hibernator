@@ -95,7 +95,7 @@ if ! can_suspend_to_disk && ! btrfs_root; then
 	#Add resume hook to initramfs if necessary
 	if ! has_resume_hook; then
 		cp /etc/mkinitcpio.conf /etc/mkinitcpio.conf.old
-		sed -i s/'filesystem/filesystem resume'/g /etc/mknitcpio.conf
+		sed -i '/^#/!s/filesystem/filesystem resume/g' /etc/mknitcpio.conf
 		mkinitcpio -P
 	fi
 fi
