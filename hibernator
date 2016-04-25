@@ -27,16 +27,12 @@ can_suspend_to_disk () {
     [[ -f /swapfile ]] || has_swap_part
 }
 
-swap_part() {
-    awk '$3=="swap" {print $1; exit}' /etc/fstab
+has_swap () {
+    [[ -f /swapfile ]] || has_swap_part
 }
 
-resume_boot_option() {
-    if [[ -f /swapfile ]]; then
-        echo "resume=$(root_part) resume_offset=$(hibernate_offset)"
-    elif has_swap_part; then
-        echo "resume=$(swap_part)"
-    fi
+swap_part() {
+    awk '$3=="swap" {print $1; exit}' /etc/fstab
 }
 
 # lock the file until the script finishes
@@ -55,47 +51,81 @@ if [[ $EUID != 0 ]]; then
 fi
 
 has_resume_hook () {
-    grep -qs resume /etc/mkinitcpio.conf || grep -qs systemd /etc/mkinitcpio.conf
+    grep -qs -e resume -e systemd /etc/mkinitcpio.conf
 }
-#############################
-lock
 
-if ! can_suspend_to_disk && ! btrfs_root; then
-  #Create and setup swapfile
+resume_boot_option() {
+    if [[ -f /swapfile ]]; then
+        echo "resume=$(root_part) resume_offset=$(hibernate_offset)"
+    elif has_swap_part; then
+        echo "resume=$(swap_part)"
+    fi
+}
+
+grub_resume_boot_option() {
+		grub_root_part=$(find /dev/disk/ | grep "$(grep " / " /etc/fstab | awk '{print $1}' | cut -d= -f 2)")
+		grub_swap_part=$(find /dev/disk/ | grep "$(awk '$3=="swap" {print $1; exit}' /etc/fstab | cut -d= -f 2)")
+    if [[ -f /swapfile ]]; then
+        echo "resume=$grub_root_part resume_offset=$(hibernate_offset)"
+    elif has_swap_part; then
+        echo "resume=$grub_swap_part"
+    fi
+}
+
+create_swap_file() {
+	#Create and setup swapfile
 	fallocate -l $(echo $swapfilesize) /swapfile
 	chmod 600 /swapfile
 	mkswap /swapfile
 	swapon /swapfile
 	echo '/swapfile	swap	swap	defaults	0	0' >> /etc/fstab
+
+}
+
+add_kernel_parameters() {
 	#Add needed kernel parameters to grub
 	if [ -e /etc/default/grub ]; then
 		cp /etc/default/grub /etc/default/grub.old
-		sed -i '/^GRUB_CMDLINE_LINUX_DEFAULT/ s/"$/ $(resume_boot_option)"/' /etc/default/grub
+		grep -q "resume" /etc/default/grub || sed -i '\*^GRUB_CMDLINE_LINUX_DEFAULT* s*"$* '"$(grub_resume_boot_option)"'"*' /etc/default/grub
 		update-grub
-	fi
-	#Add needed kernel parameters to systemd-boot
-	if [ -e /boot/loader/entries/manjaro.conf ]; then
-		cp /boot/loader/entries/manjaro.conf /boot/loader/entries/manjaro.conf.old 
-		sed -i '/initrd/s/$/ $(resume_boot_option)/' /boot/loader/entries/manjaro.conf
-	fi
-	if [ -e /boot/loader/entries/arch.conf ]; then
-		cp /boot/loader/entries/arch.conf /boot/loader/entries/arch.conf.old 
-		sed -i '/initrd/s/$/ $(resume_boot_option)/' /boot/loader/entries/arch.conf
-	fi
-	#Add needed kernel parameters to syslinux
-	if [ -e /boot/syslinux/syslinux.cfg ]; then
-		cp /boot/syslinux/syslinux.cfg /boot/syslinux/syslinux.cfg.old 
-		sed -i '/APPEND/s/$/ $(resume_boot_option)/' /boot/syslinux/syslinux.cfg
 	fi
 	#Add needed kernel parameters to refind
 	if [ -e /boot/refind_linux.conf ]; then
 		cp /boot/refind_linux.conf /boot/refind_linux.conf.old
-		sed -i 's/"$/ $(resume_boot_option)"/' /boot/refind_linux.conf
+		grep -q "$(resume_boot_option)" /boot/refind_linux.conf || sed -i 's/"$/ '"$(resume_boot_option)"'"/' /boot/refind_linux.conf
 	fi	
+}
+
+add_resume_hook() {
 	#Add resume hook to initramfs if necessary
 	if ! has_resume_hook; then
 		cp /etc/mkinitcpio.conf /etc/mkinitcpio.conf.old
-		sed -i '/^#/!s/filesystem/filesystem resume/g' /etc/mknitcpio.conf
+		sed -i '/^#/!s/filesystems/filesystems resume/g' /etc/mkinitcpio.conf
+		echo "Adding resume hook to /etc/mkinitcpio.conf"
 		mkinitcpio -P
+	else 
+		echo "Resume hook has already present"
 	fi
+}
+#############################
+main() {
+
+lock
+
+if ! has_swap; then
+	echo "No swap partition or swapfile detected."
+	if btrfs_root; then
+		echo "Your root filesystem is btrfs and does not support swapfiles!"
+		echo "Try again after manually creating a swap partition."
+	else
+		create_swap_file && echo "Created a swapfile."
+		add_kernel_parameters && echo "Adding necessary kernel parameters to your bootloaders"
+		add_resume_hook
+	fi
+elif has_swap_part; then
+	add_kernel_parameters && echo "Adding the necessary kernel parameters to your bootloaders"
+	add_resume_hook
 fi
+}
+
+main
