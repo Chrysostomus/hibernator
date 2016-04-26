@@ -16,7 +16,7 @@ root_filesystem() {
 }
 
 btrfs_root () {
-    [[ root_filesystem == btrfs ]]
+    [[ $(root_filesystem) == btrfs ]]
 }
 
 has_swap_part () {
@@ -86,8 +86,7 @@ add_kernel_parameters() {
 	#Add needed kernel parameters to grub
 	if [ -e /etc/default/grub ]; then
 		cp /etc/default/grub /etc/default/grub.old
-		grep -q "resume" /etc/default/grub || sed -i '\*^GRUB_CMDLINE_LINUX_DEFAULT* s*"$* '"$(grub_resume_boot_option)"'"*' /etc/default/grub
-		update-grub
+		sed -i '\*^GRUB_CMDLINE_LINUX_DEFAULT* s*"$* '"$(grub_resume_boot_option)"'"*' /etc/default/grub && update-grub
 	fi
 	#Add needed kernel parameters to refind
 	if [ -e /boot/refind_linux.conf ]; then
@@ -104,7 +103,7 @@ add_resume_hook() {
 		echo "Adding resume hook to /etc/mkinitcpio.conf"
 		mkinitcpio -P
 	else 
-		echo "Resume hook has already present"
+		echo "Resume hook was already present"
 	fi
 }
 #############################
@@ -119,11 +118,11 @@ if ! has_swap; then
 		echo "Try again after manually creating a swap partition."
 	else
 		create_swap_file && echo "Created a swapfile."
-		add_kernel_parameters && echo "Adding necessary kernel parameters to your bootloaders"
+		echo "Adding necessary kernel parameters to your bootloaders" && echo "" && add_kernel_parameters
 		add_resume_hook
 	fi
 elif has_swap_part; then
-	add_kernel_parameters && echo "Adding the necessary kernel parameters to your bootloaders"
+	echo "Adding the necessary kernel parameters to your bootloaders" && echo "" && add_kernel_parameters 
 	add_resume_hook
 fi
 }
