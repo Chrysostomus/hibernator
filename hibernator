@@ -87,7 +87,7 @@ add_kernel_parameters() {
 	if [ -e /etc/default/grub ]; then
 		cp /etc/default/grub /etc/default/grub.old
 		sed -i "s/[[:blank:]]*$//" /etc/default/grub
-		sed -i '\*^GRUB_CMDLINE_LINUX_DEFAULT* s*"$* '"$(grub_resume_boot_option)"'"*' /etc/default/grub && update-grub
+		sed -i "/^GRUB_CMDLINE_LINUX_DEFAULT/ s~\"$~ $grub_resume_boot_option\"~g" /etc/default/grub && update-grub
 	fi
 	#Add needed kernel parameters to refind
 	if [ -e /boot/refind_linux.conf ]; then
