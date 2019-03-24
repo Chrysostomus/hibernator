@@ -63,8 +63,8 @@ resume_boot_option() {
 }
 
 grub_resume_boot_option() {
-		grub_root_part=$(find /dev/disk/ | grep "$(grep " / " /etc/fstab | awk '{print $1}' | cut -d= -f 2)")
-		grub_swap_part=$(find /dev/disk/ | grep "$(awk '$3=="swap" {print $1; exit}' /etc/fstab | cut -d= -f 2)")
+	grub_root_part=$(find /dev/disk/ | grep "$(awk '$2~/^\/$/ {print $1}' /etc/fstab | cut -d= -f 2)")
+	grub_swap_part=$(find /dev/disk/ | grep "$(awk '$3=="swap" {print $1; exit}' /etc/fstab | cut -d= -f 2)")
     if [[ -f /swapfile ]]; then
         echo "resume=$grub_root_part resume_offset=$(hibernate_offset)"
     elif has_swap_part; then
@@ -87,7 +87,7 @@ add_kernel_parameters() {
 	if [ -e /etc/default/grub ]; then
 		cp /etc/default/grub /etc/default/grub.old
 		sed -i "s/[[:blank:]]*$//" /etc/default/grub
-		sed -i "/^GRUB_CMDLINE_LINUX_DEFAULT/ s~\"$~ $grub_resume_boot_option\"~g" /etc/default/grub && update-grub
+		sed -i "/^GRUB_CMDLINE_LINUX_DEFAULT/ s~\"$~ $(grub_resume_boot_option)\"~g" /etc/default/grub && update-grub
 	fi
 	#Add needed kernel parameters to refind
 	if [ -e /boot/refind_linux.conf ]; then
