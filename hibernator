@@ -94,6 +94,13 @@ add_kernel_parameters() {
 		cp /boot/refind_linux.conf /boot/refind_linux.conf.old
 		grep -q "$(resume_boot_option)" /boot/refind_linux.conf || sed -i 's/"$/ '"$(resume_boot_option)"'"/' /boot/refind_linux.conf
 	fi	
+	#Add needed kernel parameters to systemd-boot
+	if [ -e /boot/loader/loader.conf ]; then
+		local ENTRYCONF
+		ENTRYCONF=/boot/loader/entries/$(grep default /boot/loader/loader.conf | awk '{print $2}').conf
+		cp "$ENTRYCONF" "$ENTRYCONF.old"
+		grep -q "$(grub_resume_boot_option)" "$ENTRYCONF" || sed -i "/^options/s:\s*$: $(grub_resume_boot_option):" "$ENTRYCONF"
+	fi
 }
 
 add_resume_hook() {
