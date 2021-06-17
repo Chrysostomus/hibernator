@@ -97,7 +97,8 @@ add_kernel_parameters() {
 	#Add needed kernel parameters to systemd-boot
 	if [ -e /boot/loader/loader.conf ]; then
 		local ENTRYCONF
-		ENTRYCONF=/boot/loader/entries/$(grep default /boot/loader/loader.conf | awk '{print $2}').conf
+		ENTRYCONF=/boot/loader/entries/$(grep default /boot/loader/loader.conf | awk '{print $2}')
+		ENTRYCONF=${ENTRYCONF%.conf}.conf
 		cp "$ENTRYCONF" "$ENTRYCONF.old"
 		grep -q "$(grub_resume_boot_option)" "$ENTRYCONF" || sed -i "/^options/s:\s*$: $(grub_resume_boot_option):" "$ENTRYCONF"
 	fi
